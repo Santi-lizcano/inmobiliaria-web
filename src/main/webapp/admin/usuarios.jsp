@@ -13,6 +13,7 @@
     <meta charset="UTF-8">
     <title>Usuarios</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/estilos.css">
 </head>
 <body class="bg-light">
 
@@ -38,7 +39,7 @@
         <div class="alert alert-danger">${error}</div>
     </c:if>
 
-    <div class="card shadow-sm">
+    <div class="card card-auth">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">

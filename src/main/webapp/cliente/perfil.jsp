@@ -13,6 +13,7 @@
     <meta charset="UTF-8">
     <title>Mi perfil</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/estilos.css">
 </head>
 <body class="bg-light">
 
@@ -48,7 +49,7 @@
 
         <%-- Datos de la cuenta (no editables) --%>
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card card-auth"></div>
                 <div class="card-header bg-dark text-white">Cuenta</div>
                 <div class="card-body">
                     <p class="mb-1"><strong>Correo:</strong><br>${usuario.correo}</p>
@@ -71,7 +72,7 @@
 
         <%-- Datos del perfil (editables) --%>
         <div class="col-md-8">
-            <div class="card shadow-sm">
+            <div class="card card-auth">
                 <div class="card-header bg-primary text-white">Datos personales</div>
                 <div class="card-body">
 

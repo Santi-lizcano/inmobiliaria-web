@@ -34,7 +34,7 @@ public class AuthFilter implements Filter {
         }
 
         // Control por rol para /admin/*, /inmobiliaria/*, /cliente/*
-        List<String> roles = (List<String>) ses.getAttribute("roles");
+        List<String> roles = obtenerRoles(ses);
         if (path.startsWith("/admin") && !roles.contains("ADMINISTRADOR")) {
             s.sendRedirect(r.getContextPath() + "/acceso-denegado.jsp"); return;
         }
@@ -47,6 +47,16 @@ public class AuthFilter implements Filter {
             s.sendRedirect(r.getContextPath() + "/acceso-denegado.jsp"); return;
         }
         chain.doFilter(req, res);
+    }
+
+    private List<String> obtenerRoles(HttpSession ses) {
+        Object atributo = ses.getAttribute("roles");
+        if (!(atributo instanceof List<?> lista)) return List.of();
+
+        return lista.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList();
     }
 
     private boolean esPublica(String path) {

@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <title>Mis citas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/estilos.css">
 </head>
 <body>
 <nav class="navbar navbar-dark bg-primary">

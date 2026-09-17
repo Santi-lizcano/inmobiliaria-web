@@ -72,7 +72,11 @@ public class ClienteServlet extends HttpServlet {
             } else {
                 req.setAttribute("error", "Datos duplicados en el sistema.");
             }
-            verFormularioPerfil(req, res);
+            try {
+                verFormularioPerfil(req, res);
+            } catch (Exception ex) {
+                throw new ServletException("No se pudo recargar el perfil", ex);
+            }
 
         } catch (Exception e) {
             e.printStackTrace();

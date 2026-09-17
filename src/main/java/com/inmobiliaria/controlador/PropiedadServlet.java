@@ -81,7 +81,11 @@ public class PropiedadServlet extends HttpServlet {
             }
             // Volver al formulario conservando lo que el usuario escribió
             req.setAttribute("propiedad", construirDesdeRequest(req));
-            cargarCatalogos(req);
+            try {
+                cargarCatalogos(req);
+            } catch (Exception ex) {
+                throw new ServletException("No se pudieron recargar los catálogos", ex);
+            }
             req.getRequestDispatcher("/propiedades/formulario.jsp").forward(req, res);
 
         } catch (Exception e) {

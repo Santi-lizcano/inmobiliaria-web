@@ -66,8 +66,12 @@ public class CitaServlet extends HttpServlet {
             req.setAttribute("error",
                 "Ya existe una visita agendada para esa propiedad en ese horario. " +
                 "Por favor elige otra fecha u hora.");
-            req.setAttribute("propiedad",
-                propiedadDAO.buscarPorId(Integer.parseInt(req.getParameter("idPropiedad"))));
+            try {
+                req.setAttribute("propiedad",
+                    propiedadDAO.buscarPorId(Integer.parseInt(req.getParameter("idPropiedad"))));
+            } catch (Exception ex) {
+                throw new ServletException("No se pudo recargar la propiedad", ex);
+            }
             req.getRequestDispatcher("/citas/formulario.jsp").forward(req, res);
 
         } catch (Exception e) {

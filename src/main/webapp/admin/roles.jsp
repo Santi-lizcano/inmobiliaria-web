@@ -13,6 +13,7 @@
     <meta charset="UTF-8">
     <title>Roles</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/estilos.css">
 </head>
 <body class="bg-light">
 
@@ -38,7 +39,7 @@
         <div class="alert alert-danger">${error}</div>
     </c:if>
 
-    <div class="card shadow-sm">
+    <div class="card card-auth">
         <div class="card-body p-3">
             <p class="text-muted mb-0">
                 Para asignar un rol a un usuario: selecciona rol y usuario, y presiona <strong>Asignar</strong>.
@@ -87,7 +88,7 @@
 
     <%-- Listado de usuarios para ver/revocar --%>
     <h5 class="mt-4">Usuarios y sus roles</h5>
-    <div class="card shadow-sm">
+    <div class="card card-auth">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">

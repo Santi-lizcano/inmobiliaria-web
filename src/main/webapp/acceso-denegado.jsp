@@ -1,6 +1,7 @@
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 ...
 <div class="d-grid gap-2 mt-4">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/estilos.css">
     <a href="${pageContext.request.contextPath}/" class="btn btn-primary">Volver al inicio</a>
 
     <c:choose>
