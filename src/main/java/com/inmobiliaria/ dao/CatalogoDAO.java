@@ -46,6 +46,19 @@ public class CatalogoDAO {
         return lista;
     }
 
+    public List<String[]> listarRoles() throws SQLException {
+        List<String[]> lista = new ArrayList<>();
+        String sql = "SELECT id_rol, nombre FROM rol ORDER BY nombre";
+        try (Connection cn = ConexionDB.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql);
+         ResultSet rs = ps.executeQuery()) {
+           while (rs.next()) {
+             lista.add(new String[]{ rs.getString("id_rol"), rs.getString("nombre") });
+           }
+        }   
+        return lista;
+    }
+
     /** Devuelve los IDs de características marcadas de una propiedad (para el formulario editar). */
     public List<Integer> caracteristicasDePropiedad(int idPropiedad) throws SQLException {
         List<Integer> ids = new ArrayList<>();
