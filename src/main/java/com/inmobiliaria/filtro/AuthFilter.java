@@ -10,9 +10,13 @@ import java.util.*;
 public class AuthFilter implements Filter {
 
     private static final Set<String> PUBLICAS = Set.of(
-        "/", "/index.jsp", "/login.jsp", "/registro.jsp",
-        "/LoginServlet", "/RegistroServlet", "/css", "/js", "/img"
-    );
+    "/", "/index.jsp",
+    "/login.jsp", "/registro.jsp",
+    "/LoginServlet", "/RegistroServlet",
+    "/acceso-denegado.jsp",  
+    "/error.jsp",             
+    "/css", "/js", "/img"
+);
 
     @Override
     public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
