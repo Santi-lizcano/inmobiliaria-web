@@ -1,1 +1,335 @@
-package com.inmobiliaria.controlador; import com.inmobiliaria.dao.CitaDAO; import com.inmobiliaria.modelo.Cita; import com.inmobiliaria.modelo.Usuario; import javax.servlet.ServletException; import javax.servlet.annotation.WebServlet; import javax.servlet.http.*; import java.io.IOException; import java.sql.Timestamp; import java.time.LocalDateTime; import java.time.format.DateTimeParseException; import java.util.List; import java.util.logging.Level; import java.util.logging.Logger; @WebServlet("/CitaServlet") public class CitaServlet extends HttpServlet { private static final Logger LOGGER = Logger.getLogger(CitaServlet.class.getName()); private static final String ESTADO_PENDIENTE = "Pendiente"; private static final String ESTADO_CONFIRMADA = "Confirmada"; private static final String ESTADO_CANCELADA = "Cancelada"; private CitaDAO citaDAO; @Override public void init() throws ServletException { super.init(); this.citaDAO = new CitaDAO(); } @Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException { Usuario usuario = obtenerUsuarioAutenticado(request, response); if (usuario == null) return; String accion = leerParametro(request, "accion", "listar"); try { switch (accion) { case "listar": listarCitas(request, response, usuario); break; case "cancelar": case "confirmar": response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "La operación debe hacerse por POST."); break; default: listarCitas(request, response, usuario); break; } } catch (Exception e) { manejarError(request, response, "Error al procesar la cita.", e); } } @Override protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException { request.setCharacterEncoding("UTF-8"); Usuario usuario = obtenerUsuarioAutenticado(request, response); if (usuario == null) return; String accion = leerParametro(request, "accion", ""); try { switch (accion) { case "agendar": agendarCita(request, response, usuario); break; case "cancelar": cambiarEstadoCita(request, response, usuario, ESTADO_CANCELADA); break; case "confirmar": cambiarEstadoCita(request, response, usuario, ESTADO_CONFIRMADA); break; default: response.sendRedirect(request.getContextPath() + "/citas?accion=listar"); break; } } catch (IllegalArgumentException e) { LOGGER.log(Level.WARNING, "Parámetros inválidos al procesar cita", e); request.setAttribute("error", e.getMessage()); request.getRequestDispatcher("/error.jsp").forward(request, response); } catch (Exception e) { manejarError(request, response, "Error al procesar la operación de la cita.", e); } } private Usuario obtenerUsuarioAutenticado(HttpServletRequest request, HttpServletResponse response) throws IOException { HttpSession session = request.getSession(false); if (session == null || session.getAttribute("usuario") == null) { response.sendRedirect(request.getContextPath() + "/login.jsp"); return null; } Object obj = session.getAttribute("usuario"); if (!(obj instanceof Usuario)) { session.invalidate(); response.sendRedirect(request.getContextPath() + "/login.jsp"); return null; } return (Usuario) obj; } private boolean esCliente(Usuario usuario) { if (usuario == null) return false; String rol = usuario.getRol(); return rol != null && ("Cliente".equalsIgnoreCase(rol) || "CLIENTE".equalsIgnoreCase(rol)); } private boolean esAdminOInmobiliaria(Usuario usuario) { if (usuario == null) return false; String rol = usuario.getRol(); return rol != null && ( "Admin".equalsIgnoreCase(rol) || "ADMIN".equalsIgnoreCase(rol) || "Inmobiliaria".equalsIgnoreCase(rol) || "GESTOR".equalsIgnoreCase(rol) || "Gestor".equalsIgnoreCase(rol) ); } private void listarCitas(HttpServletRequest request, HttpServletResponse response, Usuario usuario) throws Exception { List<Cita> listaCitas; if (esCliente(usuario)) { listaCitas = citaDAO.listarPorCliente(usuario.getIdUsuario()); } else if (esAdminOInmobiliaria(usuario)) { listaCitas = citaDAO.listarTodas(); } else { response.sendError(HttpServletResponse.SC_FORBIDDEN, "No tiene permisos para consultar citas."); return; } request.setAttribute("citas", listaCitas); request.getRequestDispatcher("/citas/lista.jsp").forward(request, response); } private void agendarCita(HttpServletRequest request, HttpServletResponse response, Usuario cliente) throws Exception { if (!esCliente(cliente)) { response.sendError(HttpServletResponse.SC_FORBIDDEN, "Solo los clientes pueden agendar citas."); return; } int idPropiedad = leerEnteroPositivo(request, "idPropiedad"); LocalDateTime fechaHoraLocal = leerFechaHora(request, "fechaHora"); if (!fechaHoraLocal.isAfter(LocalDateTime.now())) { throw new IllegalArgumentException("La fecha y hora de la cita deben ser futuras."); } Cita nuevaCita = new Cita(); nuevaCita.setIdPropiedad(idPropiedad); nuevaCita.setIdCliente(cliente.getIdUsuario()); nuevaCita.setFechaHora(Timestamp.valueOf(fechaHoraLocal)); nuevaCita.setEstado(ESTADO_PENDIENTE); boolean creada = citaDAO.crear(nuevaCita); if (creada) { request.getSession().setAttribute("mensajeExito", "Cita agendada correctamente."); response.sendRedirect(request.getContextPath() + "/citas?accion=listar"); } else { request.getSession().setAttribute("mensajeError", "El horario seleccionado ya no está disponible para este inmueble."); response.sendRedirect(request.getContextPath() + "/propiedades?accion=ver&id=" + idPropiedad); } } private void cambiarEstadoCita(HttpServletRequest request, HttpServletResponse response, Usuario usuario, String nuevoEstado) throws Exception { int idCita = leerEnteroPositivo(request, "id"); Cita cita = citaDAO.obtenerPorId(idCita); if (cita == null) { response.sendError(HttpServletResponse.SC_NOT_FOUND, "La cita no existe."); return; } if (!puedeModificarCita(usuario, cita, nuevoEstado)) { response.sendError(HttpServletResponse.SC_FORBIDDEN, "No tiene permisos para modificar esta cita."); return; } if (!estadoPermitido(cita.getEstado(), nuevoEstado)) { request.getSession().setAttribute("mensajeError", "La cita no puede pasar de " + cita.getEstado() + " a " + nuevoEstado + "."); response.sendRedirect(request.getContextPath() + "/citas?accion=listar"); return; } boolean actualizado = citaDAO.actualizarEstado(idCita, nuevoEstado); if (actualizado) { request.getSession().setAttribute("mensajeExito", "La cita ha sido marcada como " + nuevoEstado + "."); } else { request.getSession().setAttribute("mensajeError", "No se pudo actualizar la cita."); } response.sendRedirect(request.getContextPath() + "/citas?accion=listar"); } private boolean puedeModificarCita(Usuario usuario, Cita cita, String nuevoEstado) { if (esAdminOInmobiliaria(usuario)) { return true; } if (esCliente(usuario)) { return ESTADO_CANCELADA.equals(nuevoEstado) && cita.getIdCliente() == usuario.getIdUsuario(); } return false; } private boolean estadoPermitido(String estadoActual, String nuevoEstado) { if (estadoActual == null || nuevoEstado == null) return false; if (ESTADO_CANCELADA.equals(estadoActual)) return false; if (ESTADO_CONFIRMADA.equals(nuevoEstado)) { return ESTADO_PENDIENTE.equals(estadoActual); } if (ESTADO_CANCELADA.equals(nuevoEstado)) { return ESTADO_PENDIENTE.equals(estadoActual) || ESTADO_CONFIRMADA.equals(estadoActual); } return false; } private String leerParametro(HttpServletRequest request, String nombre, String defecto) { String valor = request.getParameter(nombre); if (valor == null) return defecto; valor = valor.trim(); return valor.isEmpty() ? defecto : valor; } private int leerEnteroPositivo(HttpServletRequest request, String nombre) { String valor = leerParametro(request, nombre, ""); if (valor.isEmpty()) { throw new IllegalArgumentException("El parámetro '" + nombre + "' es obligatorio."); } try { int numero = Integer.parseInt(valor); if (numero <= 0) { throw new IllegalArgumentException("El parámetro '" + nombre + "' debe ser mayor que cero."); } return numero; } catch (NumberFormatException e) { throw new IllegalArgumentException("El parámetro '" + nombre + "' debe ser un número válido."); } } private LocalDateTime leerFechaHora(HttpServletRequest request, String nombre) { String valor = leerParametro(request, nombre, ""); if (valor.isEmpty()) { throw new IllegalArgumentException("La fecha y hora de la cita son obligatorias."); } try { return LocalDateTime.parse(valor); } catch (DateTimeParseException e) { throw new IllegalArgumentException("La fecha y hora de la cita no tienen un formato válido."); } } private void manejarError(HttpServletRequest request, HttpServletResponse response, String mensaje, Exception e) throws ServletException, IOException { LOGGER.log(Level.SEVERE, mensaje, e); request.setAttribute("error", mensaje); request.getRequestDispatcher("/error.jsp").forward(request, response); } }
+package com.inmobiliaria.controlador;
+
+import com.inmobiliaria.dao.CitaDAO;
+import com.inmobiliaria.dao.PropiedadDAO;
+import com.inmobiliaria.dao.UsuarioDAO;
+import com.inmobiliaria.modelo.Cita;
+import com.inmobiliaria.modelo.Propiedad;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+
+import java.io.IOException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@WebServlet("/CitaServlet")
+public class CitaServlet extends HttpServlet {
+
+    private final CitaDAO      citaDAO      = new CitaDAO();
+    private final PropiedadDAO propiedadDAO = new PropiedadDAO();
+    private final UsuarioDAO   usuarioDAO   = new UsuarioDAO();
+
+    /* =========================================================
+       GET: listar | ver | formulario
+       ========================================================= */
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse res)
+            throws ServletException, IOException {
+
+        String accion = req.getParameter("accion");
+        if (accion == null) accion = "listar";
+
+        try {
+            switch (accion) {
+                case "ver"      -> ver(req, res);
+                case "formulario" -> formulario(req, res);
+                default         -> listar(req, res);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            req.setAttribute("error", "Error al procesar la solicitud: " + e.getMessage());
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+        }
+    }
+
+    /* =========================================================
+       POST: crear | cambiarEstado | cancelar
+       ========================================================= */
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse res)
+            throws ServletException, IOException {
+
+        req.setCharacterEncoding("UTF-8");
+        String accion = req.getParameter("accion");
+
+        try {
+            if ("crear".equals(accion))              crear(req, res);
+            else if ("cambiarEstado".equals(accion)) cambiarEstado(req, res);
+            else if ("cancelar".equals(accion))      cancelar(req, res);
+            else res.sendRedirect(req.getContextPath() + "/CitaServlet?accion=listar");
+
+        } catch (SQLIntegrityConstraintViolationException e) {
+            // Captura del UNIQUE (id_propiedad, fecha_hora)
+            req.setAttribute("error",
+                "Ya existe una visita agendada para esa propiedad en ese horario. " +
+                "Por favor elige otra fecha u hora.");
+            req.setAttribute("propiedad",
+                propiedadDAO.buscarPorId(Integer.parseInt(req.getParameter("idPropiedad"))));
+            req.getRequestDispatcher("/citas/formulario.jsp").forward(req, res);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            req.setAttribute("error", "Error inesperado: " + e.getMessage());
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+        }
+    }
+
+    /* =========================================================
+       ACCIÓN: LISTAR (según rol)
+       ========================================================= */
+    @SuppressWarnings("unchecked")
+    private void listar(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        HttpSession ses = req.getSession(false);
+        if (ses == null || ses.getAttribute("idUsuario") == null) {
+            res.sendRedirect(req.getContextPath() + "/login.jsp?error=sesion");
+            return;
+        }
+
+        int idUsuario = (Integer) ses.getAttribute("idUsuario");
+        List<String> roles = (List<String>) ses.getAttribute("roles");
+
+        List<Cita> citas;
+        if (roles.contains("ADMINISTRADOR")) {
+            citas = citaDAO.listarTodas();
+        } else if (roles.contains("INMOBILIARIA")) {
+            Integer idInm = obtenerIdInmobiliariaDeSesion(req);
+            citas = (idInm != null) ? citaDAO.listarPorInmobiliaria(idInm) : List.of();
+        } else {
+            citas = citaDAO.listarPorUsuario(idUsuario);
+        }
+
+        req.setAttribute("citas", citas);
+        req.getRequestDispatcher("/citas/lista.jsp").forward(req, res);
+    }
+
+    /* =========================================================
+       ACCIÓN: VER detalle
+       ========================================================= */
+    private void ver(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        int id = Integer.parseInt(req.getParameter("id"));
+        Cita c = citaDAO.buscarPorId(id);
+        if (c == null) {
+            req.setAttribute("error", "La cita no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        // Control: solo el dueño, la inmobiliaria de la propiedad o admin
+        if (!puedeAcceder(req, c)) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        req.setAttribute("cita", c);
+        req.getRequestDispatcher("/citas/detalle.jsp").forward(req, res);
+    }
+
+    /* =========================================================
+       ACCIÓN: formulario de agendar visita
+       ========================================================= */
+    private void formulario(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        if (!tieneRol(req, "CLIENTE", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        int idPropiedad = Integer.parseInt(req.getParameter("id"));
+        Propiedad p = propiedadDAO.buscarPorId(idPropiedad);
+        if (p == null) {
+            req.setAttribute("error", "La propiedad no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        req.setAttribute("propiedad", p);
+        req.getRequestDispatcher("/citas/formulario.jsp").forward(req, res);
+    }
+
+    /* =========================================================
+       ACCIÓN: CREAR cita (POST)
+       ========================================================= */
+    private void crear(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        if (!tieneRol(req, "CLIENTE", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        int idPropiedad = Integer.parseInt(req.getParameter("idPropiedad"));
+        int idUsuario   = (Integer) req.getSession().getAttribute("idUsuario");
+
+        // fecha viene como "2026-08-30T14:30" (input datetime-local)
+        LocalDateTime fechaHora = LocalDateTime.parse(req.getParameter("fechaHora"));
+
+        // Validación previa: no permitir fechas en el pasado
+        if (fechaHora.isBefore(LocalDateTime.now())) {
+            req.setAttribute("error", "No puedes agendar una cita en una fecha pasada.");
+            req.setAttribute("propiedad", propiedadDAO.buscarPorId(idPropiedad));
+            req.getRequestDispatcher("/citas/formulario.jsp").forward(req, res);
+            return;
+        }
+
+        // Validación explícita del UNIQUE (además de la restricción en BD)
+        if (citaDAO.existeEnHorario(idPropiedad, fechaHora)) {
+            req.setAttribute("error",
+                "Ya existe una visita agendada para esa propiedad en ese horario.");
+            req.setAttribute("propiedad", propiedadDAO.buscarPorId(idPropiedad));
+            req.getRequestDispatcher("/citas/formulario.jsp").forward(req, res);
+            return;
+        }
+
+        Cita c = new Cita();
+        c.setIdPropiedad(idPropiedad);
+        c.setIdUsuario(idUsuario);
+        c.setFechaHora(fechaHora);
+        c.setEstado("PENDIENTE");
+        c.setObservaciones(req.getParameter("observaciones"));
+
+        int idNueva = citaDAO.insertar(c);
+
+        usuarioDAO.registrarAuditoria(idUsuario, "CITA_CREADA",
+                "Cita ID " + idNueva + " para propiedad " + idPropiedad,
+                req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/CitaServlet?accion=listar");
+    }
+
+    /* =========================================================
+       ACCIÓN: CAMBIAR ESTADO (CONFIRMADA / REALIZADA / RECHAZADA)
+       Solo inmobiliaria dueña de la propiedad o admin.
+       ========================================================= */
+    private void cambiarEstado(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        if (!tieneRol(req, "INMOBILIARIA", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        int idCita = Integer.parseInt(req.getParameter("id"));
+        String nuevoEstado = req.getParameter("estado");
+
+        Cita c = citaDAO.buscarPorId(idCita);
+        if (c == null) {
+            req.setAttribute("error", "La cita no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        if (!puedeAcceder(req, c)) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        citaDAO.cambiarEstado(idCita, nuevoEstado);
+
+        usuarioDAO.registrarAuditoria(
+                (Integer) req.getSession().getAttribute("idUsuario"),
+                "CITA_ESTADO",
+                "Cita " + idCita + " → " + nuevoEstado,
+                req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/CitaServlet?accion=listar");
+    }
+
+    /* =========================================================
+       ACCIÓN: CANCELAR (cliente dueño de la cita o admin)
+       ========================================================= */
+    private void cancelar(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        int idCita = Integer.parseInt(req.getParameter("id"));
+        Cita c = citaDAO.buscarPorId(idCita);
+        if (c == null) {
+            req.setAttribute("error", "La cita no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        int idUsuario = (Integer) req.getSession().getAttribute("idUsuario");
+        boolean esAdmin = tieneRol(req, "ADMINISTRADOR");
+        boolean esDueño = (c.getIdUsuario() == idUsuario);
+
+        if (!esAdmin && !esDueño) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        citaDAO.cambiarEstado(idCita, "CANCELADA");
+
+        usuarioDAO.registrarAuditoria(idUsuario, "CITA_CANCELADA",
+                "Cita " + idCita, req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/CitaServlet?accion=listar");
+    }
+
+    /* =========================================================
+       HELPERS
+       ========================================================= */
+
+    @SuppressWarnings("unchecked")
+    private boolean tieneRol(HttpServletRequest req, String... requeridos) {
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return false;
+        List<String> roles = (List<String>) ses.getAttribute("roles");
+        if (roles == null) return false;
+        for (String r : requeridos) if (roles.contains(r)) return true;
+        return false;
+    }
+
+    /** Puede acceder si: es admin, es el cliente dueño de la cita,
+        o es la inmobiliaria dueña de la propiedad de la cita. */
+    @SuppressWarnings("unchecked")
+    private boolean puedeAcceder(HttpServletRequest req, Cita c) throws Exception {
+        if (tieneRol(req, "ADMINISTRADOR")) return true;
+
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return false;
+        int idUsuario = (Integer) ses.getAttribute("idUsuario");
+        List<String> roles = (List<String>) ses.getAttribute("roles");
+
+        if (roles.contains("CLIENTE") && c.getIdUsuario() == idUsuario) return true;
+
+        if (roles.contains("INMOBILIARIA")) {
+            Integer idInm = obtenerIdInmobiliariaDeSesion(req);
+            if (idInm == null) return false;
+            // Verificar si la propiedad de la cita es de esa inmobiliaria
+            Propiedad p = propiedadDAO.buscarPorId(c.getIdPropiedad());
+            return p != null && p.getIdInmobiliaria() == idInm;
+        }
+        return false;
+    }
+
+    private Integer obtenerIdInmobiliariaDeSesion(HttpServletRequest req) throws Exception {
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return null;
+
+        Object idInm = ses.getAttribute("idInmobiliaria");
+        if (idInm instanceof Integer) return (Integer) idInm;
+
+        String correo = (String) ses.getAttribute("correo");
+        if (correo == null) return null;
+
+        String sql = "SELECT i.id_inmobiliaria FROM inmobiliaria i " +
+                     "INNER JOIN usuario u ON i.correo = u.correo " +
+                     "WHERE u.correo = ?";
+        try (java.sql.Connection cn = com.inmobiliaria.config.ConexionDB.getConnection();
+             java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, correo);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        return null;
+    }
+}
