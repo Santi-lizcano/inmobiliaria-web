@@ -15,12 +15,36 @@
         <session-timeout>30</session-timeout>
     </session-config>
 
+    <!-- ==================== PÁGINAS DE ERROR ==================== -->
+
+    <!-- 404: recurso no encontrado -->
     <error-page>
         <error-code>404</error-code>
         <location>/error.jsp</location>
     </error-page>
+
+    <!-- 403: prohibido -->
+    <error-page>
+        <error-code>403</error-code>
+        <location>/acceso-denegado.jsp</location>
+    </error-page>
+
+    <!-- 500: error interno -->
     <error-page>
         <error-code>500</error-code>
         <location>/error.jsp</location>
     </error-page>
+
+    <!-- Cualquier excepción no capturada -->
+    <error-page>
+        <exception-type>java.lang.Throwable</exception-type>
+        <location>/error.jsp</location>
+    </error-page>
+
+    <!-- Excepción SQL (por ejemplo, cuando el DAO no puede conectar) -->
+    <error-page>
+        <exception-type>java.sql.SQLException</exception-type>
+        <location>/error.jsp</location>
+    </error-page>
+
 </web-app>
