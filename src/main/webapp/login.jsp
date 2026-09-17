@@ -22,9 +22,10 @@
                                 : "Debes iniciar sesión para continuar." %>
                         </div>
                     <% } %>
-                    <% if ("registrado".equals(request.getParameter("ok"))) { %>
-                        <div class="alert alert-success">Registro exitoso. Ya puedes iniciar sesión.</div>
-                    <% } %>
+
+                    <c:if test="${param.ok == 'registrado'}">
+                       <div class="alert alert-success">✅ Registro exitoso. Ya puedes iniciar sesión.</div>
+                    </c:if>
 
                     <% if ("sesionCerrada".equals(request.getParameter("ok"))) { %>
                         <div class="alert alert-success">Sesión cerrada correctamente.</div>
