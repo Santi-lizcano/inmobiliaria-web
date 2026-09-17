@@ -173,4 +173,70 @@ public class SolicitudDAO {
        ============================================================ */
     public void eliminarDocumento(int idDocumento) throws SQLException {
         String sql = "DELETE FROM documento_solicitud WHERE id_documento = ?";
-        try (Connection cn = Conexion
+        try (Connection cn = ConexionDB.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idDocumento);
+            ps.executeUpdate();
+        }
+    }
+
+    /* ============================================================
+       HELPERS
+       ============================================================ */
+    private List<Solicitud> ejecutarListado(String sql, Integer param) throws SQLException {
+        List<Solicitud> lista = new ArrayList<>();
+        try (Connection cn = ConexionDB.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            if (param != null) ps.setInt(1, param);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) lista.add(mapear(rs));
+            }
+        }
+        return lista;
+    }
+
+    private List<Solicitud.Documento> listarDocumentos(int idSolicitud) throws SQLException {
+        List<Solicitud.Documento> docs = new ArrayList<>();
+        String sql = "SELECT id_documento, nombre, url, fecha_carga " +
+                     "FROM documento_solicitud WHERE id_solicitud = ? ORDER BY fecha_carga";
+        try (Connection cn = ConexionDB.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idSolicitud);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Solicitud.Documento d = new Solicitud.Documento();
+                    d.setIdDocumento(rs.getInt("id_documento"));
+                    d.setNombre(rs.getString("nombre"));
+                    d.setUrl(rs.getString("url"));
+                    Timestamp ts = rs.getTimestamp("fecha_carga");
+                    if (ts != null) d.setFechaCarga(ts.toLocalDateTime());
+                    docs.add(d);
+                }
+            }
+        }
+        return docs;
+    }
+
+    private Solicitud mapear(ResultSet rs) throws SQLException {
+        Solicitud s = new Solicitud();
+        s.setIdSolicitud(rs.getInt("id_solicitud"));
+
+        int idCita = rs.getInt("id_cita");
+        s.setIdCita(rs.wasNull() ? null : idCita);
+
+        s.setIdUsuario(rs.getInt("id_usuario"));
+        s.setIdPropiedad(rs.getInt("id_propiedad"));
+        s.setTipo(rs.getString("tipo"));
+        s.setEstado(rs.getString("estado"));
+
+        Timestamp ts = rs.getTimestamp("fecha_radicacion");
+        if (ts != null) s.setFechaRadicacion(ts.toLocalDateTime());
+
+        s.setObservaciones(rs.getString("observaciones"));
+
+        try { s.setTituloPropiedad(rs.getString("titulo_propiedad")); } catch (SQLException ignored) {}
+        try { s.setNombreCliente(rs.getString("nombre_cliente")); } catch (SQLException ignored) {}
+        try { s.setCorreoCliente(rs.getString("correo_cliente")); } catch (SQLException ignored) {}
+        return s;
+    }
+}
