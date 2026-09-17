@@ -41,7 +41,7 @@
     <div class="row g-3">
 
         <div class="col-md-6 col-lg-3">
-            <a href="${pageContext.request.contextPath}/admin/usuarios.jsp"
+            <a href="${pageContext.request.contextPath}/AdminServlet?accion=usuarios" 
                class="card text-decoration-none shadow-sm h-100 p-3 text-center">
                 <div class="display-5">👥</div>
                 <h6 class="mt-2">Usuarios</h6>
@@ -50,7 +50,7 @@
         </div>
 
         <div class="col-md-6 col-lg-3">
-            <a href="${pageContext.request.contextPath}/admin/roles.jsp"
+            <a href="${pageContext.request.contextPath}/AdminServlet?accion=roles"
                class="card text-decoration-none shadow-sm h-100 p-3 text-center">
                 <div class="display-5">🔑</div>
                 <h6 class="mt-2">Roles</h6>
@@ -59,7 +59,7 @@
         </div>
 
         <div class="col-md-6 col-lg-3">
-            <a href="${pageContext.request.contextPath}/admin/catalogos.jsp"
+            <a href="${pageContext.request.contextPath}/AdminServlet?accion=catalogos"
                class="card text-decoration-none shadow-sm h-100 p-3 text-center">
                 <div class="display-5">🗂️</div>
                 <h6 class="mt-2">Catálogos</h6>
@@ -68,7 +68,7 @@
         </div>
 
         <div class="col-md-6 col-lg-3">
-            <a href="${pageContext.request.contextPath}/admin/auditoria.jsp"
+            <a href="${pageContext.request.contextPath}/AdminServlet?accion=auditoria"
                class="card text-decoration-none shadow-sm h-100 p-3 text-center">
                 <div class="display-5">📜</div>
                 <h6 class="mt-2">Auditoría</h6>
