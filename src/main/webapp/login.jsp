@@ -26,6 +26,10 @@
                         <div class="alert alert-success">Registro exitoso. Ya puedes iniciar sesión.</div>
                     <% } %>
 
+                    <% if ("sesionCerrada".equals(request.getParameter("ok"))) { %>
+                        <div class="alert alert-success">Sesión cerrada correctamente.</div>
+                    <% } %>
+
                     <form action="${pageContext.request.contextPath}/LoginServlet" method="post">
                         <div class="mb-3">
                             <label class="form-label">Correo</label>
