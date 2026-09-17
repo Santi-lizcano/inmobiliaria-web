@@ -32,10 +32,7 @@
                         <div class="alert alert-danger">${error}</div>
                     </c:if>
 
-                    <form method="post"
-                          action="${pageContext.request.contextPath}/RegistroServlet"
-                          class="row g-3"
-                          novalidate>
+                    <form method="post" action="${pageContext.request.contextPath}/RegistroServlet" class="row g-3">
 
                         <%-- ============ DATOS PERSONALES ============ --%>
                         <div class="col-md-6">
