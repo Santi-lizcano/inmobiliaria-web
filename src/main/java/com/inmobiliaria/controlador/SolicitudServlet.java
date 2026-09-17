@@ -1,514 +1,350 @@
 package com.inmobiliaria.controlador;
 
+import com.inmobiliaria.dao.PropiedadDAO;
 import com.inmobiliaria.dao.SolicitudDAO;
+import com.inmobiliaria.dao.UsuarioDAO;
+import com.inmobiliaria.modelo.Propiedad;
 import com.inmobiliaria.modelo.Solicitud;
-import com.inmobiliaria.modelo.Usuario;
 
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.UUID;
 
-@WebServlet("/solicitudes")
+@WebServlet("/SolicitudServlet")
+@MultipartConfig(
+    fileSizeThreshold = 1024 * 1024 * 2,
+    maxFileSize       = 1024 * 1024 * 10,
+    maxRequestSize    = 1024 * 1024 * 50
+)
 public class SolicitudServlet extends HttpServlet {
 
-    private static final Logger LOGGER =
-            Logger.getLogger(SolicitudServlet.class.getName());
+    private final SolicitudDAO solicitudDAO = new SolicitudDAO();
+    private final PropiedadDAO propiedadDAO = new PropiedadDAO();
+    private final UsuarioDAO   usuarioDAO   = new UsuarioDAO();
 
-    private static final String ROL_CLIENTE = "Cliente";
-    private static final String ROL_ADMIN = "Administrador";
-    private static final String ROL_INMOBILIARIA = "Inmobiliaria";
-    private static final String ROL_GESTOR = "Gestor";
-
-    private static final String ESTADO_EN_REVISION = "En Revision";
-    private static final String ESTADO_APROBADA = "Aprobada";
-    private static final String ESTADO_RECHAZADA = "Rechazada";
-
-    private SolicitudDAO solicitudDAO;
-
+    /* =========================================================
+       GET: listar | ver | formulario
+       ========================================================= */
     @Override
-    public void init() throws ServletException {
-        super.init();
-        this.solicitudDAO = new SolicitudDAO();
-    }
-
-    @Override
-    protected void doGet(
-            HttpServletRequest request,
-            HttpServletResponse response)
+    protected void doGet(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
 
-        Usuario usuario = obtenerUsuarioAutenticado(request, response);
-
-        if (usuario == null) {
-            return;
-        }
-
-        String accion = leerParametro(request, "accion", "listar");
+        String accion = req.getParameter("accion");
+        if (accion == null) accion = "listar";
 
         try {
             switch (accion) {
-                case "listar":
-                    listarSolicitudes(request, response, usuario);
-                    break;
-
-                case "aprobar":
-                case "rechazar":
-                    /*
-                     * Cambiar el estado mediante GET no es seguro.
-                     * Estas operaciones deben ejecutarse mediante POST.
-                     */
-                    response.sendError(
-                            HttpServletResponse.SC_METHOD_NOT_ALLOWED,
-                            "La aprobación o rechazo debe realizarse mediante POST."
-                    );
-                    break;
-
-                default:
-                    listarSolicitudes(request, response, usuario);
-                    break;
+                case "ver"        -> ver(req, res);
+                case "formulario" -> formulario(req, res);
+                default           -> listar(req, res);
             }
         } catch (Exception e) {
-            manejarError(
-                    request,
-                    response,
-                    "Error al procesar las solicitudes.",
-                    e
-            );
+            e.printStackTrace();
+            req.setAttribute("error", "Error al procesar la solicitud: " + e.getMessage());
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
         }
     }
 
+    /* =========================================================
+       POST: crear | cambiarEstado | agregarDocumento
+       ========================================================= */
     @Override
-    protected void doPost(
-            HttpServletRequest request,
-            HttpServletResponse response)
+    protected void doPost(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
 
-        request.setCharacterEncoding("UTF-8");
+        req.setCharacterEncoding("UTF-8");
+        String accion = req.getParameter("accion");
 
-        Usuario usuario = obtenerUsuarioAutenticado(request, response);
+        try {
+            if ("crear".equals(accion))                 crear(req, res);
+            else if ("cambiarEstado".equals(accion))    cambiarEstado(req, res);
+            else if ("agregarDocumento".equals(accion)) agregarDocumento(req, res);
+            else res.sendRedirect(req.getContextPath() + "/SolicitudServlet?accion=listar");
 
-        if (usuario == null) {
+        } catch (Exception e) {
+            e.printStackTrace();
+            req.setAttribute("error", "Error inesperado: " + e.getMessage());
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+        }
+    }
+
+    /* =========================================================
+       ACCIÓN: LISTAR (según rol)
+       ========================================================= */
+    @SuppressWarnings("unchecked")
+    private void listar(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        HttpSession ses = req.getSession(false);
+        if (ses == null || ses.getAttribute("idUsuario") == null) {
+            res.sendRedirect(req.getContextPath() + "/login.jsp?error=sesion");
             return;
         }
 
-        String accion = leerParametro(request, "accion", "");
+        int idUsuario = (Integer) ses.getAttribute("idUsuario");
+        List<String> roles = (List<String>) ses.getAttribute("roles");
 
-        try {
-            switch (accion) {
-                case "radicar":
-                    radicarSolicitud(request, response, usuario);
-                    break;
-
-                case "aprobar":
-                    evaluarSolicitud(
-                            request,
-                            response,
-                            usuario,
-                            ESTADO_APROBADA
-                    );
-                    break;
-
-                case "rechazar":
-                    evaluarSolicitud(
-                            request,
-                            response,
-                            usuario,
-                            ESTADO_RECHAZADA
-                    );
-                    break;
-
-                default:
-                    response.sendRedirect(
-                            request.getContextPath()
-                                    + "/solicitudes?accion=listar"
-                    );
-                    break;
-            }
-        } catch (IllegalArgumentException e) {
-            LOGGER.log(
-                    Level.WARNING,
-                    "Parámetros inválidos en solicitud",
-                    e
-            );
-
-            request.setAttribute("error", e.getMessage());
-            request.getRequestDispatcher("/error.jsp")
-                    .forward(request, response);
-
-        } catch (Exception e) {
-            manejarError(
-                    request,
-                    response,
-                    "Error al procesar la solicitud.",
-                    e
-            );
+        List<Solicitud> solicitudes;
+        if (roles.contains("ADMINISTRADOR")) {
+            solicitudes = solicitudDAO.listarTodas();
+        } else if (roles.contains("INMOBILIARIA")) {
+            Integer idInm = obtenerIdInmobiliariaDeSesion(req);
+            solicitudes = (idInm != null) ? solicitudDAO.listarPorInmobiliaria(idInm) : List.of();
+        } else {
+            solicitudes = solicitudDAO.listarPorUsuario(idUsuario);
         }
+
+        req.setAttribute("solicitudes", solicitudes);
+        req.getRequestDispatcher("/solicitudes/lista.jsp").forward(req, res);
     }
 
-    // =========================================================
-    // AUTENTICACIÓN
-    // =========================================================
+    /* =========================================================
+       ACCIÓN: VER detalle
+       ========================================================= */
+    private void ver(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
 
-    private Usuario obtenerUsuarioAutenticado(
-            HttpServletRequest request,
-            HttpServletResponse response)
-            throws IOException {
-
-        HttpSession session = request.getSession(false);
-
-        if (session == null) {
-            response.sendRedirect(
-                    request.getContextPath() + "/login.jsp"
-            );
-            return null;
+        int id = Integer.parseInt(req.getParameter("id"));
+        Solicitud s = solicitudDAO.buscarPorId(id);
+        if (s == null) {
+            req.setAttribute("error", "La solicitud no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
         }
 
-        Object usuarioObject = session.getAttribute("usuario");
-
-        if (!(usuarioObject instanceof Usuario)) {
-            session.invalidate();
-
-            response.sendRedirect(
-                    request.getContextPath() + "/login.jsp"
-            );
-            return null;
+        if (!puedeAcceder(req, s)) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
         }
 
-        return (Usuario) usuarioObject;
+        req.setAttribute("solicitud", s);
+        req.getRequestDispatcher("/solicitudes/detalle.jsp").forward(req, res);
     }
 
-    // =========================================================
-    // AUTORIZACIÓN
-    // =========================================================
+    /* =========================================================
+       ACCIÓN: formulario (radicar solicitud)
+       ========================================================= */
+    private void formulario(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
 
-    private boolean tieneRol(
-            HttpServletRequest request,
-            String rolBuscado) {
-
-        HttpSession session = request.getSession(false);
-
-        if (session == null || rolBuscado == null) {
-            return false;
+        if (!tieneRol(req, "CLIENTE", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
         }
 
-        Object rolesObject = session.getAttribute("roles");
-
-        if (!(rolesObject instanceof List<?>)) {
-            return false;
+        int idPropiedad = Integer.parseInt(req.getParameter("id"));
+        Propiedad p = propiedadDAO.buscarPorId(idPropiedad);
+        if (p == null) {
+            req.setAttribute("error", "La propiedad no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
         }
 
-        List<?> roles = (List<?>) rolesObject;
+        req.setAttribute("propiedad", p);
+        req.getRequestDispatcher("/solicitudes/formulario.jsp").forward(req, res);
+    }
 
-        for (Object rol : roles) {
-            if (rol != null
-                    && rolBuscado.equalsIgnoreCase(rol.toString())) {
-                return true;
-            }
+    /* =========================================================
+       ACCIÓN: CREAR solicitud con documentos adjuntos
+       ========================================================= */
+    private void crear(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        if (!tieneRol(req, "CLIENTE", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
         }
 
+        int idPropiedad = Integer.parseInt(req.getParameter("idPropiedad"));
+        int idUsuario   = (Integer) req.getSession().getAttribute("idUsuario");
+        String tipo     = req.getParameter("tipo");               // COMPRA / ARRIENDO
+        String observ   = req.getParameter("observaciones");
+        String idCitaStr = req.getParameter("idCita");
+
+        Solicitud s = new Solicitud();
+        s.setIdPropiedad(idPropiedad);
+        s.setIdUsuario(idUsuario);
+        s.setTipo(tipo);
+        s.setObservaciones(observ);
+        if (idCitaStr != null && !idCitaStr.isEmpty()) {
+            try { s.setIdCita(Integer.parseInt(idCitaStr)); } catch (NumberFormatException ignored) {}
+        }
+
+        // Subir los documentos adjuntos
+        s.setDocumentos(subirDocumentos(req, idPropiedad));
+
+        int idNueva = solicitudDAO.insertar(s);
+
+        usuarioDAO.registrarAuditoria(idUsuario, "SOLICITUD_CREADA",
+                "Solicitud ID " + idNueva + " (" + tipo + ") propiedad " + idPropiedad,
+                req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/SolicitudServlet?accion=ver&id=" + idNueva);
+    }
+
+    /* =========================================================
+       ACCIÓN: CAMBIAR ESTADO (solo inmobiliaria dueña o admin)
+       ========================================================= */
+    private void cambiarEstado(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        if (!tieneRol(req, "INMOBILIARIA", "ADMINISTRADOR")) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        int idSolicitud = Integer.parseInt(req.getParameter("id"));
+        String nuevoEstado = req.getParameter("estado");  // EN_REVISION / APROBADA / RECHAZADA
+
+        Solicitud s = solicitudDAO.buscarPorId(idSolicitud);
+        if (s == null) {
+            req.setAttribute("error", "La solicitud no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        if (!puedeAcceder(req, s)) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        solicitudDAO.cambiarEstado(idSolicitud, nuevoEstado);
+
+        usuarioDAO.registrarAuditoria(
+                (Integer) req.getSession().getAttribute("idUsuario"),
+                "SOLICITUD_ESTADO",
+                "Solicitud " + idSolicitud + " → " + nuevoEstado,
+                req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/SolicitudServlet?accion=ver&id=" + idSolicitud);
+    }
+
+    /* =========================================================
+       ACCIÓN: AGREGAR documento a solicitud existente
+       ========================================================= */
+    private void agregarDocumento(HttpServletRequest req, HttpServletResponse res)
+            throws Exception {
+
+        int idSolicitud = Integer.parseInt(req.getParameter("id"));
+        Solicitud s = solicitudDAO.buscarPorId(idSolicitud);
+        if (s == null) {
+            req.setAttribute("error", "La solicitud no existe.");
+            req.getRequestDispatcher("/error.jsp").forward(req, res);
+            return;
+        }
+
+        if (!puedeAcceder(req, s)) {
+            res.sendRedirect(req.getContextPath() + "/acceso-denegado.jsp");
+            return;
+        }
+
+        List<Solicitud.Documento> nuevos = subirDocumentos(req, s.getIdPropiedad());
+        for (Solicitud.Documento d : nuevos) {
+            solicitudDAO.agregarDocumento(idSolicitud, d.getNombre(), d.getUrl());
+        }
+
+        usuarioDAO.registrarAuditoria(
+                (Integer) req.getSession().getAttribute("idUsuario"),
+                "SOLICITUD_DOC_AGREGADO",
+                "Solicitud " + idSolicitud + " + " + nuevos.size() + " documentos",
+                req.getRemoteAddr());
+
+        res.sendRedirect(req.getContextPath() + "/SolicitudServlet?accion=ver&id=" + idSolicitud);
+    }
+
+    /* =========================================================
+       HELPERS
+       ========================================================= */
+
+    /** Sube los archivos <input type="file" name="documentos" multiple> */
+    private List<Solicitud.Documento> subirDocumentos(HttpServletRequest req, int idPropiedad)
+            throws IOException, ServletException {
+
+        List<Solicitud.Documento> docs = new ArrayList<>();
+        String uploadPath = getServletContext().getRealPath("/uploads/documentos");
+        File dir = new File(uploadPath);
+        if (!dir.exists()) dir.mkdirs();
+
+        for (Part part : req.getParts()) {
+            if (!"documentos".equals(part.getName())) continue;
+            if (part.getSize() == 0) continue;
+
+            String original = Paths.get(part.getSubmittedFileName())
+                                    .getFileName().toString();
+            String ext = original.contains(".")
+                    ? original.substring(original.lastIndexOf('.'))
+                    : ".pdf";
+            String nombreGuardado = UUID.randomUUID() + ext;
+
+            File destino = new File(dir, nombreGuardado);
+            part.write(destino.getAbsolutePath());
+
+            Solicitud.Documento d = new Solicitud.Documento();
+            d.setNombre(original);     // nombre original visible
+            d.setUrl(req.getContextPath() + "/uploads/documentos/" + nombreGuardado);
+            docs.add(d);
+        }
+        return docs;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean tieneRol(HttpServletRequest req, String... requeridos) {
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return false;
+        List<String> roles = (List<String>) ses.getAttribute("roles");
+        if (roles == null) return false;
+        for (String r : requeridos) if (roles.contains(r)) return true;
         return false;
     }
 
-    private boolean esCliente(HttpServletRequest request) {
-        return tieneRol(request, ROL_CLIENTE);
+    @SuppressWarnings("unchecked")
+    private boolean puedeAcceder(HttpServletRequest req, Solicitud s) throws Exception {
+        if (tieneRol(req, "ADMINISTRADOR")) return true;
+
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return false;
+        int idUsuario = (Integer) ses.getAttribute("idUsuario");
+        List<String> roles = (List<String>) ses.getAttribute("roles");
+
+        if (roles.contains("CLIENTE") && s.getIdUsuario() == idUsuario) return true;
+
+        if (roles.contains("INMOBILIARIA")) {
+            Integer idInm = obtenerIdInmobiliariaDeSesion(req);
+            if (idInm == null) return false;
+            Propiedad p = propiedadDAO.buscarPorId(s.getIdPropiedad());
+            return p != null && p.getIdInmobiliaria() == idInm;
+        }
+        return false;
     }
 
-    private boolean puedeEvaluarSolicitudes(
-            HttpServletRequest request) {
+    private Integer obtenerIdInmobiliariaDeSesion(HttpServletRequest req) throws Exception {
+        HttpSession ses = req.getSession(false);
+        if (ses == null) return null;
 
-        return tieneRol(request, ROL_ADMIN)
-                || tieneRol(request, ROL_INMOBILIARIA)
-                || tieneRol(request, ROL_GESTOR);
-    }
+        Object idInm = ses.getAttribute("idInmobiliaria");
+        if (idInm instanceof Integer) return (Integer) idInm;
 
-    // =========================================================
-    // LISTAR SOLICITUDES
-    // =========================================================
+        String correo = (String) ses.getAttribute("correo");
+        if (correo == null) return null;
 
-    private void listarSolicitudes(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            Usuario usuario)
-            throws Exception {
-
-        List<Solicitud> lista;
-
-        if (esCliente(request)) {
-            lista = solicitudDAO.listarPorCliente(
-                    usuario.getIdUsuario()
-            );
-        } else if (puedeEvaluarSolicitudes(request)) {
-            lista = solicitudDAO.listarTodas();
-        } else {
-            response.sendError(
-                    HttpServletResponse.SC_FORBIDDEN,
-                    "No tiene permisos para consultar solicitudes."
-            );
-            return;
-        }
-
-        request.setAttribute("solicitudes", lista);
-
-        request.getRequestDispatcher(
-                "/solicitudes/lista.jsp"
-        ).forward(request, response);
-    }
-
-    // =========================================================
-    // RADICAR SOLICITUD
-    // =========================================================
-
-    private void radicarSolicitud(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            Usuario cliente)
-            throws Exception {
-
-        if (!esCliente(request)) {
-            response.sendError(
-                    HttpServletResponse.SC_FORBIDDEN,
-                    "Solo los clientes pueden radicar solicitudes."
-            );
-            return;
-        }
-
-        int idPropiedad = leerEnteroPositivo(
-                request,
-                "idPropiedad"
-        );
-
-        String tipoSolicitud = leerParametro(
-                request,
-                "tipoSolicitud",
-                ""
-        );
-
-        String observaciones = leerParametro(
-                request,
-                "observaciones",
-                ""
-        );
-
-        if (!"Compra".equalsIgnoreCase(tipoSolicitud)
-                && !"Arriendo".equalsIgnoreCase(tipoSolicitud)) {
-
-            throw new IllegalArgumentException(
-                    "El tipo de solicitud debe ser Compra o Arriendo."
-            );
-        }
-
-        if (observaciones.length() > 1000) {
-            throw new IllegalArgumentException(
-                    "Las observaciones no pueden superar los 1000 caracteres."
-            );
-        }
-
-        Solicitud solicitud = new Solicitud();
-
-        solicitud.setIdPropiedad(idPropiedad);
-        solicitud.setIdCliente(cliente.getIdUsuario());
-        solicitud.setTipo(tipoSolicitud);
-        solicitud.setObservaciones(observaciones);
-        solicitud.setEstado(ESTADO_EN_REVISION);
-
-        boolean creada = solicitudDAO.crear(solicitud);
-
-        if (creada) {
-            request.getSession().setAttribute(
-                    "mensajeExito",
-                    "Solicitud radicada correctamente. "
-                            + "La inmobiliaria la revisará pronto."
-            );
-
-            response.sendRedirect(
-                    request.getContextPath()
-                            + "/solicitudes?accion=listar"
-            );
-        } else {
-            request.getSession().setAttribute(
-                    "mensajeError",
-                    "No se pudo radicar la solicitud. "
-                            + "Intente nuevamente."
-            );
-
-            response.sendRedirect(
-                    request.getContextPath()
-                            + "/propiedades?accion=ver&id="
-                            + idPropiedad
-            );
-        }
-    }
-
-    // =========================================================
-    // APROBAR O RECHAZAR SOLICITUD
-    // =========================================================
-
-    private void evaluarSolicitud(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            Usuario usuario,
-            String nuevoEstado)
-            throws Exception {
-
-        if (!puedeEvaluarSolicitudes(request)) {
-            response.sendError(
-                    HttpServletResponse.SC_FORBIDDEN,
-                    "No tiene permisos para evaluar solicitudes."
-            );
-            return;
-        }
-
-        int idSolicitud = leerEnteroPositivo(
-                request,
-                "id"
-        );
-
-        Solicitud solicitud = solicitudDAO.obtenerPorId(idSolicitud);
-
-        if (solicitud == null) {
-            response.sendError(
-                    HttpServletResponse.SC_NOT_FOUND,
-                    "La solicitud no existe."
-            );
-            return;
-        }
-
-        if (!ESTADO_EN_REVISION.equals(solicitud.getEstado())) {
-            request.getSession().setAttribute(
-                    "mensajeError",
-                    "La solicitud ya fue procesada anteriormente."
-            );
-
-            response.sendRedirect(
-                    request.getContextPath()
-                            + "/solicitudes?accion=listar"
-            );
-            return;
-        }
-
-        if (!ESTADO_APROBADA.equals(nuevoEstado)
-                && !ESTADO_RECHAZADA.equals(nuevoEstado)) {
-
-            throw new IllegalArgumentException(
-                    "Estado de solicitud no permitido."
-            );
-        }
-
-        boolean actualizado = solicitudDAO.actualizarEstado(
-                idSolicitud,
-                nuevoEstado
-        );
-
-        if (actualizado) {
-            request.getSession().setAttribute(
-                    "mensajeExito",
-                    "La solicitud fue actualizada a: "
-                            + nuevoEstado
-            );
-        } else {
-            request.getSession().setAttribute(
-                    "mensajeError",
-                    "No se pudo actualizar el estado de la solicitud."
-            );
-        }
-
-        response.sendRedirect(
-                request.getContextPath()
-                        + "/solicitudes?accion=listar"
-        );
-    }
-
-    // =========================================================
-    // VALIDACIÓN DE PARÁMETROS
-    // =========================================================
-
-    private String leerParametro(
-            HttpServletRequest request,
-            String nombre,
-            String valorPorDefecto) {
-
-        String valor = request.getParameter(nombre);
-
-        if (valor == null) {
-            return valorPorDefecto;
-        }
-
-        valor = valor.trim();
-
-        return valor.isEmpty()
-                ? valorPorDefecto
-                : valor;
-    }
-
-    private int leerEnteroPositivo(
-            HttpServletRequest request,
-            String nombre) {
-
-        String valor = leerParametro(
-                request,
-                nombre,
-                ""
-        );
-
-        if (valor.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "El parámetro '" + nombre + "' es obligatorio."
-            );
-        }
-
-        try {
-            int numero = Integer.parseInt(valor);
-
-            if (numero <= 0) {
-                throw new IllegalArgumentException(
-                        "El parámetro '" + nombre
-                                + "' debe ser mayor que cero."
-                );
+        String sql = "SELECT i.id_inmobiliaria FROM inmobiliaria i " +
+                     "INNER JOIN usuario u ON i.correo = u.correo " +
+                     "WHERE u.correo = ?";
+        try (java.sql.Connection cn = com.inmobiliaria.config.ConexionDB.getConnection();
+             java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, correo);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
             }
-
-            return numero;
-
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(
-                    "El parámetro '" + nombre
-                            + "' debe ser un número entero válido."
-            );
         }
-    }
-
-    // =========================================================
-    // MANEJO DE ERRORES
-    // =========================================================
-
-    private void manejarError(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            String mensaje,
-            Exception exception)
-            throws ServletException, IOException {
-
-        LOGGER.log(
-                Level.SEVERE,
-                mensaje,
-                exception
-        );
-
-        /*
-         * No se muestra exception.getMessage() al usuario,
-         * porque podría revelar información de la base de datos
-         * o detalles internos de la aplicación.
-         */
-        request.setAttribute("error", mensaje);
-
-        request.getRequestDispatcher(
-                "/error.jsp"
-        ).forward(request, response);
+        return null;
     }
 }
