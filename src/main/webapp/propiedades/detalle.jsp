@@ -55,10 +55,11 @@
                 <p><strong>Estado:</strong> <span class="badge bg-success">${propiedad.estado}</span></p>
 
                 <c:if test="${sessionScope.roles.contains('CLIENTE')}">
-                    <a href="${pageContext.request.contextPath}/citas/formulario.jsp?id=${propiedad.idPropiedad}"
-                       class="btn btn-warning w-100 mt-2">📅 Agendar visita</a>
-                    <a href="${pageContext.request.contextPath}/favoritos?id=${propiedad.idPropiedad}"
-                       class="btn btn-outline-danger w-100 mt-2">❤️ Guardar en favoritos</a>
+                    <a href="${pageContext.request.contextPath}/CitaServlet?accion=formulario&id=${propiedad.idPropiedad}"
+                    class="btn btn-warning w-100 mt-2">📅 Agendar visita</a>
+
+                    <a href="${pageContext.request.contextPath}/FavoritoServlet?accion=agregar&id=${propiedad.idPropiedad}"
+                    class="btn btn-outline-danger w-100 mt-2">❤️ Guardar en favoritos</a>
                 </c:if>
             </div>
         </div>
