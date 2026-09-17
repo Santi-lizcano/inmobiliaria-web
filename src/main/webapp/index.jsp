@@ -20,10 +20,68 @@
         </button>
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav ms-auto">
-                <li class="nav-item"><a class="nav-link" href="#propiedades">Propiedades</a></li>
-                <li class="nav-item"><a class="nav-link" href="${pageContext.request.contextPath}/login.jsp">Iniciar sesión</a></li>
-                <li class="nav-item"><a class="btn btn-light btn-sm ms-2" href="${pageContext.request.contextPath}/registro.jsp">Registrarse</a></li>
-            </ul>
+    <li class="nav-item">
+        <a class="nav-link" href="#propiedades">Propiedades</a>
+    </li>
+
+    <c:choose>
+        <c:when test="${not empty sessionScope.idUsuario}">
+            
+            <li class="nav-item">
+                <c:choose>
+
+                    <c:when test="${sessionScope.roles.contains('ADMINISTRADOR')}">
+                        <a class="btn btn-light btn-sm ms-2"
+                           href="${pageContext.request.contextPath}/dashboard/admin.jsp">
+                            Mi panel
+                        </a>
+                    </c:when>
+
+                    <c:when test="${sessionScope.roles.contains('INMOBILIARIA')}">
+                        <a class="btn btn-light btn-sm ms-2"
+                           href="${pageContext.request.contextPath}/dashboard/inmobiliaria.jsp">
+                            Mi panel
+                        </a>
+                    </c:when>
+
+                    <c:otherwise>
+                        <a class="btn btn-light btn-sm ms-2"
+                           href="${pageContext.request.contextPath}/dashboard/cliente.jsp">
+                            Mi panel
+                        </a>
+                    </c:otherwise>
+
+                </c:choose>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link"
+                   href="${pageContext.request.contextPath}/LogoutServlet">
+                    Salir
+                </a>
+            </li>
+
+        </c:when>
+
+        <c:otherwise>
+
+            <li class="nav-item">
+                <a class="nav-link"
+                   href="${pageContext.request.contextPath}/login.jsp">
+                    Iniciar sesión
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="btn btn-light btn-sm ms-2"
+                   href="${pageContext.request.contextPath}/registro.jsp">
+                    Registrarse
+                </a>
+            </li>
+
+        </c:otherwise>
+    </c:choose>
+</ul>
         </div>
     </div>
 </nav>
