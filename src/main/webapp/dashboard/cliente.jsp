@@ -114,7 +114,7 @@
     <div class="row g-3">
 
         <div class="col-md-6 col-lg-4">
-            <a href="${pageContext.request.contextPath}/cliente/perfil.jsp"
+            <a href="${pageContext.request.contextPath}/ClienteServlet?accion=ver"
                class="card text-decoration-none shadow-sm h-100 p-3">
                 <h6>👤 Mi perfil</h6>
                 <small class="text-muted">Actualizar datos personales</small>
@@ -122,10 +122,18 @@
         </div>
 
         <div class="col-md-6 col-lg-4">
-            <a href="${pageContext.request.contextPath}/cliente/cambiar-password.jsp"
+            <a href="${pageContext.request.contextPath}/ClienteServlet?accion=cambiarPassword"
                class="card text-decoration-none shadow-sm h-100 p-3">
                 <h6>🔒 Cambiar contraseña</h6>
                 <small class="text-muted">Seguridad de la cuenta</small>
+            </a>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <a href="${pageContext.request.contextPath}/FavoritoServlet?accion=listar"
+               class="card text-decoration-none shadow-sm h-100 p-3">
+                <h6>🔒 Favoritos </h6>
+                <small class="text-muted">Favoritos</small>
             </a>
         </div>
 
