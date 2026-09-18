@@ -349,6 +349,24 @@ public class UsuarioDAO {
         return lista;
     }
 
+    /* Mapa idUsuario → List<String> de nombres de roles */
+    public java.util.Map<Integer, List<String>> rolesPorUsuario() throws SQLException {
+        java.util.Map<Integer, List<String>> mapa = new java.util.HashMap<>();
+        String sql = "SELECT ur.id_usuario, r.nombre " +
+                 "FROM usuario_rol ur " +
+                 "INNER JOIN rol r ON ur.id_rol = r.id_rol " +
+                 "ORDER BY ur.id_usuario, r.nombre";
+        try (Connection cn = ConexionDB.getConnection();
+            PreparedStatement ps = cn.prepareStatement(sql);
+            ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+            int id = rs.getInt("id_usuario");
+            mapa.computeIfAbsent(id, k -> new ArrayList<>()).add(rs.getString("nombre"));
+        }
+    }
+    return mapa;
+}
+
     /* ============================================================
        MAPEO ResultSet → Usuario
        ============================================================ */

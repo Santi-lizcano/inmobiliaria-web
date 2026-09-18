@@ -59,6 +59,18 @@ public class CatalogoDAO {
         return lista;
     }
 
+    public Integer obtenerIdRolPorNombre(String nombre) throws SQLException {
+    String sql = "SELECT id_rol FROM rol WHERE nombre = ?";
+    try (Connection cn = ConexionDB.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+        ps.setString(1, nombre);
+        try (ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getInt(1);
+        }
+    }
+    return null;
+}
+
     /** Devuelve los IDs de características marcadas de una propiedad (para el formulario editar). */
     public List<Integer> caracteristicasDePropiedad(int idPropiedad) throws SQLException {
         List<Integer> ids = new ArrayList<>();

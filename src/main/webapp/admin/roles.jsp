@@ -39,14 +39,6 @@
         <div class="alert alert-danger">${error}</div>
     </c:if>
 
-    <div class="card card-auth">
-        <div class="card-body p-3">
-            <p class="text-muted mb-0">
-                Para asignar un rol a un usuario: selecciona rol y usuario, y presiona <strong>Asignar</strong>.
-                Para revocar: hazlo desde la lista de asignaciones de abajo.
-            </p>
-        </div>
-    </div>
 
     <%-- Formulario de asignación rápida --%>
     <div class="card shadow-sm mt-3">
@@ -104,62 +96,67 @@
                     </thead>
                     <tbody>
                         <c:forEach var="u" items="${usuarios}">
-                            <tr>
-                                <td>${u.idUsuario}</td>
-                                <td>${u.correo}</td>
-                                <td>${u.nombreCompleto}</td>
-                                <td>
-                                    <c:choose>
-                                        <c:when test="${u.estado == 'ACTIVO'}">
-                                            <span class="badge bg-success">ACTIVO</span>
-                                        </c:when>
-                                        <c:otherwise>
-                                            <span class="badge bg-secondary">${u.estado}</span>
-                                        </c:otherwise>
-                                    </c:choose>
-                                </td>
-                                <td>
-                                    <%-- Nota: para ver los roles por fila necesitas
-                                         una consulta adicional; aquí mostramos un botón
-                                         para ir al detalle del usuario. --%>
-                                    <a class="btn btn-sm btn-outline-secondary"
-                                       href="${pageContext.request.contextPath}/AdminServlet?accion=editarUsuario&id=${u.idUsuario}">
-                                        Ver roles
-                                    </a>
-                                </td>
-                                <td>
+                        <tr>
+                            <td>${u.idUsuario}</td>
+                            <td>${u.correo}</td>
+                            <td>${u.nombreCompleto}</td>
+                            <td>
+                                <c:choose>
+                                    <c:when test="${u.estado == 'ACTIVO'}">
+                                        <span class="badge bg-success">ACTIVO</span>
+                                    </c:when>
+                                    <c:when test="${u.estado == 'INACTIVO'}">
+                                        <span class="badge bg-secondary">INACTIVO</span>
+                                    </c:when>
+                                    <c:when test="${u.estado == 'BLOQUEADO'}">
+                                        <span class="badge bg-danger">BLOQUEADO</span>
+                                    </c:when>
+                                </c:choose>
+
+                            <%-- Botones para cambiar estado --%>
+                            <div class="mt-1">
+                                <c:if test="${u.estado != 'ACTIVO'}">
                                     <form method="post"
-                                          action="${pageContext.request.contextPath}/AdminServlet"
-                                          class="row g-1">
-                                        <input type="hidden" name="accion" value="revocarRol">
-                                        <input type="hidden" name="idUsuario" value="${u.idUsuario}">
-                                        <div class="col-8">
-                                            <select name="idRol" class="form-select form-select-sm">
-                                                <option value="">Rol a revocar</option>
-                                                <c:forEach var="r" items="${rolesDisponibles}">
-                                                    <option value="${r[0]}">${r[1]}</option>
-                                                </c:forEach>
-                                            </select>
-                                        </div>
-                                        <div class="col-4">
-                                            <button class="btn btn-sm btn-outline-danger w-100">Revocar</button>
-                                        </div>
+                                        action="${pageContext.request.contextPath}/AdminServlet"
+                                        class="d-inline">
+                                    <input type="hidden" name="accion" value="cambiarEstado">
+                                    <input type="hidden" name="id" value="${u.idUsuario}">
+                                    <input type="hidden" name="estado" value="ACTIVO">
+                                    <button class="btn btn-sm btn-outline-success">Activar</button>
                                     </form>
-                                </td>
-                            </tr>
+                                </c:if>
+                                <c:if test="${u.estado != 'BLOQUEADO'}">
+                                    <form method="post"
+                                        action="${pageContext.request.contextPath}/AdminServlet"
+                                        class="d-inline"
+                                        onsubmit="return confirm('¿Bloquear a ${u.correo}?');">
+                                        <input type="hidden" name="accion" value="cambiarEstado">
+                                        <input type="hidden" name="id" value="${u.idUsuario}">
+                                        <input type="hidden" name="estado" value="BLOQUEADO">
+                                        <button class="btn btn-sm btn-outline-danger">Bloquear</button>
+                                    </form>
+                                </c:if>
+                                <c:if test="${u.estado != 'INACTIVO'}">
+                                    <form method="post"
+                                        action="${pageContext.request.contextPath}/AdminServlet"
+                                        class="d-inline"
+                                        onsubmit="return confirm('¿Inactivar a ${u.correo}?');">
+                                        <input type="hidden" name="accion" value="cambiarEstado">
+                                        <input type="hidden" name="id" value="${u.idUsuario}">
+                                        <input type="hidden" name="estado" value="INACTIVO">
+                                        <button class="btn btn-sm btn-outline-secondary">Inactivar</button>
+                                    </form>
+                                </c:if>
+                                </div>
+                            </div>
+                            </td>
+                        </tr>
                         </c:forEach>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-
-    <div class="alert alert-info mt-4">
-        <strong>💡 Nota:</strong> la tabla <code>usuario_rol</code> tiene clave primaria compuesta
-        <code>(id_usuario, id_rol)</code>, por lo que es imposible asignar el mismo rol dos veces
-        a un usuario (relación N:M).
-    </div>
-
 </div>
 </body>
 </html>

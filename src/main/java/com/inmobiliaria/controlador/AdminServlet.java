@@ -94,9 +94,9 @@ public class AdminServlet extends HttpServlet {
     }
 
     private void verRoles(HttpServletRequest req, HttpServletResponse res) throws Exception {
-        // Pasamos usuarios y roles disponibles para armar la matriz de asignación
         req.setAttribute("usuarios", usuarioDAO.listarTodos());
         req.setAttribute("rolesDisponibles", catalogoDAO.listarRoles());
+        req.setAttribute("rolesPorUsuario", usuarioDAO.rolesPorUsuario());  // ← NUEVO
         req.getRequestDispatcher("/admin/roles.jsp").forward(req, res);
     }
 
@@ -151,13 +151,21 @@ public class AdminServlet extends HttpServlet {
     }
 
     private void revocarRol(HttpServletRequest req, HttpServletResponse res) throws Exception {
-        int idUsuario = Integer.parseInt(req.getParameter("idUsuario"));
-        int idRol = Integer.parseInt(req.getParameter("idRol"));
-        usuarioDAO.revocarRol(idUsuario, idRol);
-        usuarioDAO.registrarAuditoria(idAdmin(req), "ROL_REVOCADO",
-                "Usuario " + idUsuario + " ⊘ rol " + idRol, req.getRemoteAddr());
+    int idUsuario = Integer.parseInt(req.getParameter("idUsuario"));
+    String nombreRol = req.getParameter("nombreRol");
+
+    // Buscar el id del rol por nombre
+    Integer idRol = catalogoDAO.obtenerIdRolPorNombre(nombreRol);
+    if (idRol == null) {
         res.sendRedirect(req.getContextPath() + "/AdminServlet?accion=roles");
+        return;
     }
+
+    usuarioDAO.revocarRol(idUsuario, idRol);
+    usuarioDAO.registrarAuditoria(idAdmin(req), "ROL_REVOCADO",
+            "Usuario " + idUsuario + " ⊘ rol " + nombreRol, req.getRemoteAddr());
+    res.sendRedirect(req.getContextPath() + "/AdminServlet?accion=roles");
+}
 
     private void actualizarUsuario(HttpServletRequest req, HttpServletResponse res) throws Exception {
         int id = Integer.parseInt(req.getParameter("id"));
