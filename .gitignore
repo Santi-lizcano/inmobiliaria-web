@@ -1,2 +1,3 @@
 src/main/webapp/uploads/documentos/*
 !src/main/webapp/uploads/documentos/.gitkeep
+target/
